@@ -131,6 +131,9 @@ class Sam(nn.Module):
                     "mask_values": mask_values,
                     "iou_predictions": iou_predictions,
                     "low_res_logits": low_res_masks,
+                    "input_images": input_images,
+                    "curr_embedding": curr_embedding,
+                    "image_embeddings": image_embeddings,
                 }
             )
         return outputs
