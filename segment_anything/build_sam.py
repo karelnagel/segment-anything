@@ -8,7 +8,13 @@ import torch
 
 from functools import partial
 
-from .modeling import ImageEncoderViT, MaskDecoder, PromptEncoder, Sam, TwoWayTransformer
+from .modeling import (
+    ImageEncoderViT,
+    MaskDecoder,
+    PromptEncoder,
+    Sam,
+    TwoWayTransformer,
+)
 
 
 def build_sam_vit_h(checkpoint=None):
@@ -34,6 +40,10 @@ def build_sam_vit_l(checkpoint=None):
     )
 
 
+def build_sam_test(checkpoint: str = None):
+    return _build_sam(8, 2, 2, [2, 5, 8, 11], checkpoint)
+
+
 def build_sam_vit_b(checkpoint=None):
     return _build_sam(
         encoder_embed_dim=768,
@@ -49,6 +59,7 @@ sam_model_registry = {
     "vit_h": build_sam_vit_h,
     "vit_l": build_sam_vit_l,
     "vit_b": build_sam_vit_b,
+    "test": build_sam_test,
 }
 
 
