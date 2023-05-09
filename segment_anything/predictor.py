@@ -55,7 +55,9 @@ class SamPredictor:
         # Transform the image to the form expected by the model
         input_image = self.transform.apply_image(image)
         input_image_torch = torch.as_tensor(input_image, device=self.device)
-        input_image_torch = input_image_torch.permute(2, 0, 1).contiguous()[None, :, :, :]
+        input_image_torch = input_image_torch.permute(2, 0, 1).contiguous()[
+            None, :, :, :
+        ]
 
         self.set_torch_image(input_image_torch, image.shape[:2])
 
@@ -97,7 +99,7 @@ class SamPredictor:
         mask_input: Optional[np.ndarray] = None,
         multimask_output: bool = True,
         return_logits: bool = False,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Predict masks for the given input prompts, using the currently set image.
 
@@ -131,7 +133,9 @@ class SamPredictor:
             a subsequent iteration as mask input.
         """
         if not self.is_image_set:
-            raise RuntimeError("An image must be set with .set_image(...) before mask prediction.")
+            raise RuntimeError(
+                "An image must be set with .set_image(...) before mask prediction."
+            )
 
         # Transform input prompts
         coords_torch, labels_torch, box_torch, mask_input_torch = None, None, None, None
@@ -140,18 +144,24 @@ class SamPredictor:
                 point_labels is not None
             ), "point_labels must be supplied if point_coords is supplied."
             point_coords = self.transform.apply_coords(point_coords, self.original_size)
-            coords_torch = torch.as_tensor(point_coords, dtype=torch.float, device=self.device)
-            labels_torch = torch.as_tensor(point_labels, dtype=torch.int, device=self.device)
+            coords_torch = torch.as_tensor(
+                point_coords, dtype=torch.float, device=self.device
+            )
+            labels_torch = torch.as_tensor(
+                point_labels, dtype=torch.int, device=self.device
+            )
             coords_torch, labels_torch = coords_torch[None, :, :], labels_torch[None, :]
         if box is not None:
             box = self.transform.apply_boxes(box, self.original_size)
             box_torch = torch.as_tensor(box, dtype=torch.float, device=self.device)
             box_torch = box_torch[None, :]
         if mask_input is not None:
-            mask_input_torch = torch.as_tensor(mask_input, dtype=torch.float, device=self.device)
+            mask_input_torch = torch.as_tensor(
+                mask_input, dtype=torch.float, device=self.device
+            )
             mask_input_torch = mask_input_torch[None, :, :, :]
 
-        masks, iou_predictions, low_res_masks = self.predict_torch(
+        masks, iou_predictions, low_res_masks, mask_values = self.predict_torch(
             coords_torch,
             labels_torch,
             box_torch,
@@ -159,11 +169,11 @@ class SamPredictor:
             multimask_output,
             return_logits=return_logits,
         )
-
+        mask_values = mask_values[0].detach().cpu().numpy()
         masks_np = masks[0].detach().cpu().numpy()
         iou_predictions_np = iou_predictions[0].detach().cpu().numpy()
         low_res_masks_np = low_res_masks[0].detach().cpu().numpy()
-        return masks_np, iou_predictions_np, low_res_masks_np
+        return masks_np, iou_predictions_np, low_res_masks_np, mask_values
 
     @torch.no_grad()
     def predict_torch(
@@ -174,7 +184,7 @@ class SamPredictor:
         mask_input: Optional[torch.Tensor] = None,
         multimask_output: bool = True,
         return_logits: bool = False,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Predict masks for the given input prompts, using the currently set image.
         Input prompts are batched torch tensors and are expected to already be
@@ -211,7 +221,9 @@ class SamPredictor:
             a subsequent iteration as mask input.
         """
         if not self.is_image_set:
-            raise RuntimeError("An image must be set with .set_image(...) before mask prediction.")
+            raise RuntimeError(
+                "An image must be set with .set_image(...) before mask prediction."
+            )
 
         if point_coords is not None:
             points = (point_coords, point_labels)
@@ -235,12 +247,14 @@ class SamPredictor:
         )
 
         # Upscale the masks to the original image resolution
-        masks = self.model.postprocess_masks(low_res_masks, self.input_size, self.original_size)
+        mask_values = self.model.postprocess_masks(
+            low_res_masks, self.input_size, self.original_size
+        )
 
         if not return_logits:
-            masks = masks > self.model.mask_threshold
+            masks = mask_values > self.model.mask_threshold
 
-        return masks, iou_predictions, low_res_masks
+        return masks, iou_predictions, low_res_masks, mask_values
 
     def get_image_embedding(self) -> torch.Tensor:
         """
@@ -252,7 +266,9 @@ class SamPredictor:
             raise RuntimeError(
                 "An image must be set with .set_image(...) to generate an embedding."
             )
-        assert self.features is not None, "Features must exist if an image has been set."
+        assert (
+            self.features is not None
+        ), "Features must exist if an image has been set."
         return self.features
 
     @property
